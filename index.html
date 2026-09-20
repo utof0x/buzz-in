@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Buzz In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<style>
+  :root {
+    --bg: #12141c;
+    --panel: #1b1f2a;
+    --panel-border: #2a2f3d;
+    --text: #f5f3ee;
+    --text-dim: #9098ac;
+    --accent: #ffb020;
+    --accent-ink: #1a1200;
+    --danger: #ff5d5d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app { min-height: 100%; display: flex; flex-direction: column; }
+  .display { font-family: "Big Shoulders Display", "Arial Narrow", sans-serif; font-weight: 900; letter-spacing: 0.01em; }
+  .wrap { flex: 1; display: flex; flex-direction: column; max-width: 640px; width: 100%; margin: 0 auto; padding: 24px 20px 32px; }
+
+  .hero { margin-top: 8vh; margin-bottom: 40px; }
+  .hero h1 { font-size: clamp(2.6rem, 10vw, 3.6rem); line-height: 0.95; margin: 0 0 10px; }
+  .hero p { color: var(--text-dim); font-size: 1.05rem; max-width: 40ch; margin: 0; }
+  .choice-stack { display: flex; flex-direction: column; gap: 14px; margin-top: auto; }
+
+  button, .btn {
+    font-family: inherit; font-size: 1.05rem; font-weight: 600;
+    border-radius: 10px; border: 2px solid var(--panel-border);
+    background: var(--panel); color: var(--text); padding: 18px 22px;
+    cursor: pointer; transition: transform 0.08s ease; text-align: left;
+  }
+  button:active:not(:disabled) { transform: scale(0.98); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn-ghost { background: transparent; }
+  .btn-block { width: 100%; }
+
+  label { display: block; font-size: 0.85rem; color: var(--text-dim); margin: 18px 0 6px; }
+  input[type=text] {
+    width: 100%; font-family: inherit; font-size: 1.15rem; padding: 14px 16px;
+    border-radius: 10px; border: 2px solid var(--panel-border);
+    background: var(--panel); color: var(--text);
+  }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .error-msg { color: var(--danger); font-size: 0.9rem; margin-top: 10px; min-height: 1.2em; }
+  .back-link { background: none; border: none; color: var(--text-dim); padding: 4px 0; font-size: 0.95rem; align-self: flex-start; }
+
+  .code-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+  .room-code { font-size: clamp(3rem, 16vw, 4.2rem); line-height: 1; }
+  .status-pill { display: inline-block; font-size: 0.8rem; color: var(--text-dim); border: 1px solid var(--panel-border); border-radius: 999px; padding: 4px 12px; margin-bottom: 20px; }
+  .status-pill.live { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+
+  .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin: 4px 0 20px; }
+  .player-tile { border: 2px solid var(--panel-border); border-left-width: 6px; border-radius: 8px; background: var(--panel); padding: 12px 14px; font-weight: 600; min-height: 20px; }
+  .rank-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 24px; }
+  .rank-row { display: flex; align-items: center; gap: 12px; border: 2px solid var(--panel-border); border-left-width: 6px; border-radius: 8px; padding: 10px 14px; background: var(--panel); }
+  .rank-num { font-family: "Big Shoulders Display"; font-weight: 900; font-size: 1.4rem; width: 1.5em; color: var(--text-dim); }
+  .empty-note { color: var(--text-dim); font-size: 0.95rem; padding: 8px 0; }
+
+  .winner-flash { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border-radius: 16px; padding: 40px 20px; animation: flashIn 0.25s ease-out; }
+  @keyframes flashIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .winner-flash .who { font-size: clamp(2.2rem, 11vw, 3.4rem); line-height: 1; margin: 0 0 6px; }
+  .winner-flash .sub { font-size: 1rem; opacity: 0.85; }
+
+  .waiting-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; }
+  .waiting-panel .big { font-size: clamp(1.8rem, 8vw, 2.4rem); }
+  .swatch-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: middle; }
+
+  .buzz-button { flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 20px; border: none; font-family: "Big Shoulders Display"; font-weight: 900; font-size: clamp(2.4rem, 12vw, 3.6rem); color: var(--accent-ink); padding: 20px; min-height: 46vh; transition: transform 0.06s ease, filter 0.15s ease; }
+  .buzz-button:active:not(:disabled) { transform: scale(0.97); }
+  .buzz-button:disabled { filter: grayscale(0.6) brightness(0.5); }
+
+  .result-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border-radius: 20px; gap: 8px; padding: 30px 20px; }
+  .result-panel .headline { font-size: clamp(2rem, 10vw, 2.8rem); line-height: 1; }
+  .result-panel .detail { opacity: 0.85; }
+  footer.tag { text-align: center; color: var(--text-dim); font-size: 0.8rem; padding-top: 10px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  "use strict";
+
+  var PALETTE = [
+    { name: "Red",    hex: "#FF4B4B" },
+    { name: "Blue",   hex: "#3FA9F5" },
+    { name: "Green",  hex: "#6FCF3D" },
+    { name: "Yellow", hex: "#FFD400" },
+    { name: "Violet", hex: "#9B5DE5" },
+    { name: "Cyan",   hex: "#35D6C6" },
+    { name: "Orange", hex: "#FF8A3D" },
+    { name: "Pink",   hex: "#FF5DA2" }
+  ];
+  var LIGHT_TEXT = "#12141c";
+  var ROOM_PREFIX = "buzzin-";
+
+  var app = document.getElementById("app");
+  var state = { screen: "landing" };
+
+  function genCode() {
+    var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
+    var out = "";
+    for (var i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  }
+
+  function sortedPlayers(list) {
+    return (list || []).slice().sort(function (a, b) {
+      var ta = a.joinedAt || 0, tb = b.joinedAt || 0;
+      if (ta !== tb) return ta - tb;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }
+
+  function colorForPlayer(players, playerId) {
+    var sorted = sortedPlayers(players);
+    var idx = sorted.findIndex(function (p) { return p.id === playerId; });
+    if (idx < 0) idx = 0;
+    return PALETTE[idx % PALETTE.length];
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function render() {
+    if (state.screen === "landing") return renderLanding();
+    if (state.screen === "host-connecting") return renderMessage("Setting up your room…");
+    if (state.screen === "host") return renderHost();
+    if (state.screen === "player-join") return renderPlayerJoin();
+    if (state.screen === "player-connecting") return renderMessage("Connecting to the host…");
+    if (state.screen === "player") return renderPlayer();
+    if (state.screen === "peer-unavailable") return renderUnavailable();
+  }
+
+  function renderMessage(msg) {
+    app.innerHTML = '<div class="wrap"><div class="waiting-panel"><p class="big">' + escapeHtml(msg) + "</p></div></div>";
+  }
+
+  function renderUnavailable() {
+    app.innerHTML =
+      '<div class="wrap"><div class="hero"><h1 class="display">Buzz&nbsp;In</h1>' +
+      '<p>Couldn’t set up a peer-to-peer connection. This usually means the network you’re on is blocking it, or the free connection service is briefly unreachable. Try again, ideally on the same WiFi as everyone else.</p></div>' +
+      '<button class="btn-primary btn-block" id="btn-retry">Try again</button></div>';
+    document.getElementById("btn-retry").onclick = function () { state.screen = "landing"; render(); };
+  }
+
+  function renderLanding() {
+    app.innerHTML =
+      '<div class="wrap">' +
+      '<div class="hero"><h1 class="display">Buzz&nbsp;In</h1><p>One host, any number of players. First tap wins the round.</p></div>' +
+      '<div class="choice-stack">' +
+      '<button class="btn-primary btn-block" id="btn-host">Host a game</button>' +
+      '<button class="btn-ghost btn-block" id="btn-join">Join a game</button>' +
+      "</div></div>";
+    document.getElementById("btn-host").onclick = startHosting;
+    document.getElementById("btn-join").onclick = function () { state.screen = "player-join"; render(); };
+  }
+
+  // ---------- host ----------
+  var hostPeer = null;
+  var hostCode = null;
+  var hostConns = {}; // peerId -> {conn, name, joinedAt}
+  var hostGame = { status: "lobby", roundId: 0, winnerId: null, winnerName: null };
+  var hostBuzzOrder = []; // [{playerId, name}] in arrival order, for current round
+  var hostAttempts = 0;
+
+  function startHosting() {
+    state.screen = "host-connecting";
+    render();
+    hostAttempts = 0;
+    tryCreateHostPeer();
+  }
+
+  function tryCreateHostPeer() {
+    hostAttempts++;
+    hostCode = genCode();
+    if (hostPeer) { try { hostPeer.destroy(); } catch (e) {} }
+    hostPeer = new Peer(ROOM_PREFIX + hostCode, { debug: 0 });
+
+    hostPeer.on("open", function () {
+      hostConns = {};
+      hostGame = { status: "lobby", roundId: 0, winnerId: null, winnerName: null };
+      hostBuzzOrder = [];
+      state.screen = "host";
+      render();
+    });
+
+    hostPeer.on("connection", function (conn) {
+      conn.on("open", function () {
+        conn.on("data", function (msg) { handleHostMessage(conn, msg); });
+        conn.on("close", function () {
+          delete hostConns[conn.peer];
+          broadcastState();
+          if (state.screen === "host") render();
+        });
+      });
+    });
+
+    hostPeer.on("error", function (err) {
+      if (err && err.type === "unavailable-id" && hostAttempts < 5) {
+        tryCreateHostPeer();
+      } else {
+        state.screen = "peer-unavailable";
+        render();
+      }
+    });
+  }
+
+  function handleHostMessage(conn, msg) {
+    if (!msg || !msg.type) return;
+    if (msg.type === "join") {
+      hostConns[conn.peer] = { conn: conn, name: String(msg.name || "Someone").slice(0, 20), joinedAt: Date.now() };
+      broadcastState();
+      if (state.screen === "host") render();
+    } else if (msg.type === "buzz") {
+      if (hostGame.status === "armed" && msg.roundId === hostGame.roundId) {
+        var p = hostConns[conn.peer];
+        var name = p ? p.name : "Someone";
+        if (!hostBuzzOrder.some(function (b) { return b.playerId === conn.peer; })) {
+          hostBuzzOrder.push({ playerId: conn.peer, name: name });
+        }
+        if (hostBuzzOrder.length === 1) {
+          hostGame.status = "buzzed";
+          hostGame.winnerId = conn.peer;
+          hostGame.winnerName = name;
+        }
+        broadcastState();
+        if (state.screen === "host") render();
+      }
+    }
+  }
+
+  function broadcastState() {
+    var players = Object.keys(hostConns).map(function (id) {
+      return { id: id, name: hostConns[id].name, joinedAt: hostConns[id].joinedAt };
+    });
+    var payload = { type: "state", game: hostGame, players: players, rest: hostBuzzOrder.slice(1) };
+    Object.keys(hostConns).forEach(function (id) {
+      try { hostConns[id].conn.send(payload); } catch (e) {}
+    });
+  }
+
+  function hostStartRound() {
+    hostGame = { status: "armed", roundId: hostGame.roundId + 1, winnerId: null, winnerName: null };
+    hostBuzzOrder = [];
+    broadcastState();
+    render();
+  }
+
+  function hostReset() {
+    hostGame.status = "lobby";
+    hostGame.winnerId = null;
+    hostGame.winnerName = null;
+    broadcastState();
+    render();
+  }
+
+  function renderHost() {
+    var players = Object.keys(hostConns).map(function (id) {
+      return { id: id, name: hostConns[id].name, joinedAt: hostConns[id].joinedAt };
+    });
+    var statusLabel = hostGame.status === "armed" ? "live — waiting for a buzz" : hostGame.status === "buzzed" ? "buzzed" : "lobby";
+
+    var playersHtml = sortedPlayers(players).map(function (p, i) {
+      var c = PALETTE[i % PALETTE.length];
+      return '<div class="player-tile" style="border-left-color:' + c.hex + '">' + escapeHtml(p.name) + "</div>";
+    }).join("");
+
+    var body;
+    if (hostGame.status === "buzzed") {
+      var sorted = sortedPlayers(players);
+      var wIdx = sorted.findIndex(function (p) { return p.id === hostGame.winnerId; });
+      var winnerColor = wIdx >= 0 ? PALETTE[wIdx % PALETTE.length].hex : "#555";
+      var rest = hostBuzzOrder.slice(1);
+      var restHtml = rest.length ? '<div class="rank-list">' + rest.map(function (b, i) {
+        var idx = sorted.findIndex(function (p) { return p.id === b.playerId; });
+        var c = idx >= 0 ? PALETTE[idx % PALETTE.length] : { hex: "#555" };
+        return '<div class="rank-row" style="border-left-color:' + c.hex + '"><span class="rank-num">' + (i + 2) + '</span><span>' + escapeHtml(b.name) + "</span></div>";
+      }).join("") + "</div>" : "";
+      body =
+        '<div class="winner-flash" style="background:' + winnerColor + "22;border:2px solid " + winnerColor + '">' +
+        '<div class="who display" style="color:' + winnerColor + '">' + escapeHtml(hostGame.winnerName || "Someone") + "</div>" +
+        '<div class="sub">buzzed in first</div></div>' + restHtml +
+        '<button class="btn-primary btn-block" id="btn-reset">Reset for next round</button>';
+    } else {
+      body =
+        '<div class="player-grid">' + (playersHtml || '<div class="empty-note">Waiting for players to join…</div>') + "</div>" +
+        '<button class="btn-primary btn-block" id="btn-start" ' + (players.length === 0 ? "disabled" : "") + ">" +
+        (hostGame.status === "armed" ? "Round live — tap to re-arm" : "Start round") + "</button>";
+    }
+
+    app.innerHTML =
+      '<div class="wrap">' +
+      '<button class="back-link" id="btn-leave">← End game</button>' +
+      '<div class="code-row"><div class="room-code display">' + hostCode + '</div></div>' +
+      '<div class="status-pill' + (hostGame.status === "armed" ? " live" : "") + '">' + statusLabel + "</div>" +
+      body +
+      '<footer class="tag">Players join with code ' + hostCode + ' — keep this tab open</footer>' +
+      "</div>";
+
+    var btnStart = document.getElementById("btn-start");
+    if (btnStart) btnStart.onclick = hostStartRound;
+    var btnReset = document.getElementById("btn-reset");
+    if (btnReset) btnReset.onclick = hostReset;
+    document.getElementById("btn-leave").onclick = function () {
+      if (hostPeer) { try { hostPeer.destroy(); } catch (e) {} }
+      hostPeer = null;
+      state.screen = "landing";
+      render();
+    };
+  }
+
+  // ---------- player ----------
+  var pPeer = null;
+  var pConn = null;
+  var playerCode = null;
+  var playerName = null;
+  var pGame = { status: "lobby", roundId: 0, winnerId: null, winnerName: null };
+  var pPlayers = [];
+  var pRest = [];
+  var hasBuzzedThisRound = false;
+
+  function renderPlayerJoin() {
+    app.innerHTML =
+      '<div class="wrap">' +
+      '<button class="back-link" id="btn-back">← Back</button>' +
+      '<div class="hero"><h1 class="display">Join</h1><p>Ask the host for the room code.</p></div>' +
+      '<label for="in-code">Room code</label>' +
+      '<input type="text" id="in-code" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="ABCD">' +
+      '<label for="in-name">Your name</label>' +
+      '<input type="text" id="in-name" maxlength="20" autocomplete="off" placeholder="e.g. Sam">' +
+      '<div class="error-msg" id="join-error"></div>' +
+      '<button class="btn-primary btn-block" id="btn-do-join" style="margin-top:16px">Join</button>' +
+      "</div>";
+    document.getElementById("btn-back").onclick = function () { state.screen = "landing"; render(); };
+    document.getElementById("btn-do-join").onclick = attemptJoin;
+  }
+
+  function attemptJoin() {
+    var code = (document.getElementById("in-code").value || "").trim().toUpperCase();
+    var name = (document.getElementById("in-name").value || "").trim();
+    var errEl = document.getElementById("join-error");
+    if (code.length !== 4) { errEl.textContent = "Enter the 4-character room code."; return; }
+    if (!name) { errEl.textContent = "Enter your name."; return; }
+    errEl.textContent = "";
+    playerCode = code;
+    playerName = name;
+    hasBuzzedThisRound = false;
+    state.screen = "player-connecting";
+    render();
+
+    if (pPeer) { try { pPeer.destroy(); } catch (e) {} }
+    pPeer = new Peer(undefined, { debug: 0 });
+
+    pPeer.on("open", function () {
+      pConn = pPeer.connect(ROOM_PREFIX + code, { reliable: true });
+
+      var failTimer = setTimeout(function () {
+        if (state.screen === "player-connecting") {
+          state.screen = "player-join";
+          render();
+          var e = document.getElementById("join-error");
+          if (e) e.textContent = "Couldn’t reach a game with that code. Check it and try again.";
+        }
+      }, 8000);
+
+      pConn.on("open", function () {
+        clearTimeout(failTimer);
+        pConn.send({ type: "join", name: name });
+        pConn.on("data", function (msg) { handlePlayerMessage(msg); });
+        pConn.on("close", function () { state.screen = "peer-unavailable"; render(); });
+        state.screen = "player";
+        render();
+      });
+      pConn.on("error", function () { clearTimeout(failTimer); });
+    });
+
+    pPeer.on("error", function () {
+      state.screen = "player-join";
+      render();
+      var e = document.getElementById("join-error");
+      if (e) e.textContent = "Couldn’t connect. Check the code, or try the same WiFi as the host.";
+    });
+  }
+
+  var lastRoundSeen = null;
+  function handlePlayerMessage(msg) {
+    if (!msg || msg.type !== "state") return;
+    if (lastRoundSeen !== null && msg.game.roundId !== lastRoundSeen) hasBuzzedThisRound = false;
+    lastRoundSeen = msg.game.roundId;
+    pGame = msg.game;
+    pPlayers = msg.players || [];
+    pRest = msg.rest || [];
+    if (state.screen === "player") render();
+  }
+
+  function playerBuzz() {
+    if (hasBuzzedThisRound || pGame.status !== "armed" || !pConn) return;
+    hasBuzzedThisRound = true;
+    render();
+    try { pConn.send({ type: "buzz", roundId: pGame.roundId }); } catch (e) {}
+  }
+
+  function renderPlayer() {
+    var myColor = colorForPlayer(pPlayers, pPeer ? pPeer.id : null);
+
+    if (pGame.status === "buzzed") {
+      var won = pGame.winnerId === (pPeer ? pPeer.id : null);
+      var bg = won ? myColor.hex : "#1b1f2a";
+      var ink = won ? LIGHT_TEXT : "var(--text)";
+      app.innerHTML =
+        '<div class="wrap"><div class="result-panel" style="background:' + bg + ";color:" + ink + '">' +
+        '<div class="headline display">' + (won ? "You got it!" : "Too slow") + "</div>" +
+        '<div class="detail">' + (won ? "Everyone else is watching you." : escapeHtml(pGame.winnerName || "Someone") + " buzzed first.") + "</div>" +
+        "</div>" +
+        '<p style="text-align:center;color:var(--text-dim);margin-top:14px">Waiting for the host to start the next round…</p></div>';
+      return;
+    }
+
+    var armed = pGame.status === "armed";
+    app.innerHTML =
+      '<div class="wrap">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+      '<span><span class="swatch-dot" style="background:' + myColor.hex + '"></span>' + escapeHtml(playerName) + "</span>" +
+      '<span style="color:var(--text-dim);font-size:0.85rem">room ' + playerCode + "</span></div>" +
+      '<button class="buzz-button" id="btn-buzz" style="background:' + (armed && !hasBuzzedThisRound ? myColor.hex : "#2a2f3d") + '" ' +
+      (armed && !hasBuzzedThisRound ? "" : "disabled") + ">" +
+      (hasBuzzedThisRound ? "Buzzed!" : armed ? "BUZZ" : "Wait for it…") + "</button></div>";
+
+    var btn = document.getElementById("btn-buzz");
+    if (btn) btn.onclick = playerBuzz;
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
