@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="uk">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Buzz In</title>
+<title>Тисни Першим</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <style>
   :root {
@@ -29,11 +29,11 @@
     -webkit-tap-highlight-color: transparent;
   }
   #app { min-height: 100%; display: flex; flex-direction: column; }
-  .display { font-family: "Big Shoulders Display", "Arial Narrow", sans-serif; font-weight: 900; letter-spacing: 0.01em; }
+  .display { font-family: "Oswald", "Arial Narrow", sans-serif; font-weight: 700; letter-spacing: 0.01em; }
   .wrap { flex: 1; display: flex; flex-direction: column; max-width: 640px; width: 100%; margin: 0 auto; padding: 24px 20px 32px; }
 
   .hero { margin-top: 8vh; margin-bottom: 40px; }
-  .hero h1 { font-size: clamp(2.6rem, 10vw, 3.6rem); line-height: 0.95; margin: 0 0 10px; }
+  .hero h1 { font-size: clamp(2.4rem, 9vw, 3.4rem); line-height: 1; margin: 0 0 10px; text-transform: uppercase; }
   .hero p { color: var(--text-dim); font-size: 1.05rem; max-width: 40ch; margin: 0; }
   .choice-stack { display: flex; flex-direction: column; gap: 14px; margin-top: auto; }
 
@@ -68,7 +68,7 @@
   .player-tile { border: 2px solid var(--panel-border); border-left-width: 6px; border-radius: 8px; background: var(--panel); padding: 12px 14px; font-weight: 600; min-height: 20px; }
   .rank-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 24px; }
   .rank-row { display: flex; align-items: center; gap: 12px; border: 2px solid var(--panel-border); border-left-width: 6px; border-radius: 8px; padding: 10px 14px; background: var(--panel); }
-  .rank-num { font-family: "Big Shoulders Display"; font-weight: 900; font-size: 1.4rem; width: 1.5em; color: var(--text-dim); }
+  .rank-num { font-family: "Oswald", "Arial Narrow", sans-serif; font-weight: 700; font-size: 1.4rem; width: 1.5em; color: var(--text-dim); }
   .empty-note { color: var(--text-dim); font-size: 0.95rem; padding: 8px 0; }
 
   .winner-flash { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border-radius: 16px; padding: 40px 20px; animation: flashIn 0.25s ease-out; }
@@ -80,9 +80,16 @@
   .waiting-panel .big { font-size: clamp(1.8rem, 8vw, 2.4rem); }
   .swatch-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: middle; }
 
-  .buzz-button { flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 20px; border: none; font-family: "Big Shoulders Display"; font-weight: 900; font-size: clamp(2.4rem, 12vw, 3.6rem); color: var(--accent-ink); padding: 20px; min-height: 46vh; transition: transform 0.06s ease, filter 0.15s ease; }
+  .countdown-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
+  .countdown-num { font-size: clamp(7rem, 38vw, 13rem); line-height: 1; color: var(--accent); animation: popIn 0.32s ease-out; }
+  .countdown-note { color: var(--text-dim); font-size: 1rem; }
+  @keyframes popIn { from { transform: scale(0.55); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  .buzz-button { flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 20px; border: none; font-family: "Oswald", "Arial Narrow", sans-serif; font-weight: 700; font-size: clamp(2.4rem, 12vw, 3.6rem); color: var(--accent-ink); padding: 20px; min-height: 46vh; text-align: center; transition: transform 0.06s ease, filter 0.15s ease; }
   .buzz-button:active:not(:disabled) { transform: scale(0.97); }
   .buzz-button:disabled { filter: grayscale(0.6) brightness(0.5); }
+  .buzz-button.counting { font-size: clamp(5rem, 30vw, 9rem); color: var(--accent); animation: popIn 0.32s ease-out; }
+  .buzz-button.counting:disabled { filter: none; opacity: 1; }
 
   .result-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border-radius: 20px; gap: 8px; padding: 30px 20px; }
   .result-panel .headline { font-size: clamp(2rem, 10vw, 2.8rem); line-height: 1; }
@@ -97,23 +104,24 @@
   "use strict";
 
   var PALETTE = [
-    { name: "Red",    hex: "#FF4B4B" },
-    { name: "Blue",   hex: "#3FA9F5" },
-    { name: "Green",  hex: "#6FCF3D" },
-    { name: "Yellow", hex: "#FFD400" },
-    { name: "Violet", hex: "#9B5DE5" },
-    { name: "Cyan",   hex: "#35D6C6" },
-    { name: "Orange", hex: "#FF8A3D" },
-    { name: "Pink",   hex: "#FF5DA2" }
+    { name: "Червоний", hex: "#FF4B4B" },
+    { name: "Синій",    hex: "#3FA9F5" },
+    { name: "Зелений",  hex: "#6FCF3D" },
+    { name: "Жовтий",   hex: "#FFD400" },
+    { name: "Фіолет",   hex: "#9B5DE5" },
+    { name: "Бірюза",   hex: "#35D6C6" },
+    { name: "Помаранч", hex: "#FF8A3D" },
+    { name: "Рожевий",  hex: "#FF5DA2" }
   ];
   var LIGHT_TEXT = "#12141c";
   var ROOM_PREFIX = "buzzin-";
+  var COUNTDOWN_FROM = 3;
 
   var app = document.getElementById("app");
   var state = { screen: "landing" };
 
   function genCode() {
-    var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
+    var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // без 0/O/1/I
     var out = "";
     for (var i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
     return out;
@@ -140,12 +148,46 @@
     });
   }
 
+  // ---------- не даємо екрану згаснути ----------
+  var wakeLock = null;
+
+  function wantsWakeLock() {
+    return state.screen !== "landing";
+  }
+
+  function requestWakeLock() {
+    if (!navigator.wakeLock || wakeLock || !wantsWakeLock()) return;
+    if (document.visibilityState !== "visible") return;
+    navigator.wakeLock.request("screen").then(function (lock) {
+      wakeLock = lock;
+      lock.addEventListener("release", function () { wakeLock = null; });
+    }).catch(function () {});
+  }
+
+  function releaseWakeLock() {
+    if (!wakeLock) return;
+    var lock = wakeLock;
+    wakeLock = null;
+    try { lock.release(); } catch (e) {}
+  }
+
+  function syncWakeLock() {
+    if (wantsWakeLock()) requestWakeLock();
+    else releaseWakeLock();
+  }
+
+  // браузер сам знімає блокування, коли вкладку сховано — беремо його назад
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") requestWakeLock();
+  });
+
   function render() {
+    syncWakeLock();
     if (state.screen === "landing") return renderLanding();
-    if (state.screen === "host-connecting") return renderMessage("Setting up your room…");
+    if (state.screen === "host-connecting") return renderMessage("Готуємо кімнату…");
     if (state.screen === "host") return renderHost();
     if (state.screen === "player-join") return renderPlayerJoin();
-    if (state.screen === "player-connecting") return renderMessage("Connecting to the host…");
+    if (state.screen === "player-connecting") return renderMessage("З’єднуємося з ведучим…");
     if (state.screen === "player") return renderPlayer();
     if (state.screen === "peer-unavailable") return renderUnavailable();
   }
@@ -156,31 +198,36 @@
 
   function renderUnavailable() {
     app.innerHTML =
-      '<div class="wrap"><div class="hero"><h1 class="display">Buzz&nbsp;In</h1>' +
-      '<p>Couldn’t set up a peer-to-peer connection. This usually means the network you’re on is blocking it, or the free connection service is briefly unreachable. Try again, ideally on the same WiFi as everyone else.</p></div>' +
-      '<button class="btn-primary btn-block" id="btn-retry">Try again</button></div>';
+      '<div class="wrap"><div class="hero"><h1 class="display">Тисни&nbsp;Першим</h1>' +
+      '<p>Не вдалося встановити пряме з’єднання між пристроями. Зазвичай це означає, що мережа його блокує або безкоштовний сервіс з’єднання тимчасово недоступний. Спробуйте ще раз — найкраще в одній Wi-Fi мережі з усіма.</p></div>' +
+      '<button class="btn-primary btn-block" id="btn-retry">Спробувати ще раз</button></div>';
     document.getElementById("btn-retry").onclick = function () { state.screen = "landing"; render(); };
   }
 
   function renderLanding() {
     app.innerHTML =
       '<div class="wrap">' +
-      '<div class="hero"><h1 class="display">Buzz&nbsp;In</h1><p>One host, any number of players. First tap wins the round.</p></div>' +
+      '<div class="hero"><h1 class="display">Тисни&nbsp;Першим</h1><p>Один ведучий, скільки завгодно гравців. Хто натиснув першим — той і виграв раунд.</p></div>' +
       '<div class="choice-stack">' +
-      '<button class="btn-primary btn-block" id="btn-host">Host a game</button>' +
-      '<button class="btn-ghost btn-block" id="btn-join">Join a game</button>' +
+      '<button class="btn-primary btn-block" id="btn-host">Створити гру</button>' +
+      '<button class="btn-ghost btn-block" id="btn-join">Приєднатися до гри</button>' +
       "</div></div>";
     document.getElementById("btn-host").onclick = startHosting;
     document.getElementById("btn-join").onclick = function () { state.screen = "player-join"; render(); };
   }
 
-  // ---------- host ----------
+  // ---------- ведучий ----------
   var hostPeer = null;
   var hostCode = null;
   var hostConns = {}; // peerId -> {conn, name, joinedAt}
-  var hostGame = { status: "lobby", roundId: 0, winnerId: null, winnerName: null };
-  var hostBuzzOrder = []; // [{playerId, name}] in arrival order, for current round
+  var hostGame = { status: "lobby", roundId: 0, count: 0, winnerId: null, winnerName: null };
+  var hostBuzzOrder = []; // [{playerId, name}] у порядку натискання, для поточного раунду
   var hostAttempts = 0;
+  var hostCountdownTimer = null;
+
+  function stopHostCountdown() {
+    if (hostCountdownTimer) { clearInterval(hostCountdownTimer); hostCountdownTimer = null; }
+  }
 
   function startHosting() {
     state.screen = "host-connecting";
@@ -196,8 +243,9 @@
     hostPeer = new Peer(ROOM_PREFIX + hostCode, { debug: 0 });
 
     hostPeer.on("open", function () {
+      stopHostCountdown();
       hostConns = {};
-      hostGame = { status: "lobby", roundId: 0, winnerId: null, winnerName: null };
+      hostGame = { status: "lobby", roundId: 0, count: 0, winnerId: null, winnerName: null };
       hostBuzzOrder = [];
       state.screen = "host";
       render();
@@ -227,13 +275,14 @@
   function handleHostMessage(conn, msg) {
     if (!msg || !msg.type) return;
     if (msg.type === "join") {
-      hostConns[conn.peer] = { conn: conn, name: String(msg.name || "Someone").slice(0, 20), joinedAt: Date.now() };
+      hostConns[conn.peer] = { conn: conn, name: String(msg.name || "Хтось").slice(0, 20), joinedAt: Date.now() };
       broadcastState();
       if (state.screen === "host") render();
     } else if (msg.type === "buzz") {
+      // під час відліку status === "countdown", тож ранні натискання не зараховуються
       if (hostGame.status === "armed" && msg.roundId === hostGame.roundId) {
         var p = hostConns[conn.peer];
-        var name = p ? p.name : "Someone";
+        var name = p ? p.name : "Хтось";
         if (!hostBuzzOrder.some(function (b) { return b.playerId === conn.peer; })) {
           hostBuzzOrder.push({ playerId: conn.peer, name: name });
         }
@@ -259,14 +308,29 @@
   }
 
   function hostStartRound() {
-    hostGame = { status: "armed", roundId: hostGame.roundId + 1, winnerId: null, winnerName: null };
+    stopHostCountdown();
+    hostGame = { status: "countdown", roundId: hostGame.roundId + 1, count: COUNTDOWN_FROM, winnerId: null, winnerName: null };
     hostBuzzOrder = [];
     broadcastState();
     render();
+
+    hostCountdownTimer = setInterval(function () {
+      if (hostGame.status !== "countdown") { stopHostCountdown(); return; }
+      hostGame.count -= 1;
+      if (hostGame.count <= 0) {
+        stopHostCountdown();
+        hostGame.count = 0;
+        hostGame.status = "armed";
+      }
+      broadcastState();
+      if (state.screen === "host") render();
+    }, 1000);
   }
 
   function hostReset() {
+    stopHostCountdown();
     hostGame.status = "lobby";
+    hostGame.count = 0;
     hostGame.winnerId = null;
     hostGame.winnerName = null;
     broadcastState();
@@ -277,7 +341,10 @@
     var players = Object.keys(hostConns).map(function (id) {
       return { id: id, name: hostConns[id].name, joinedAt: hostConns[id].joinedAt };
     });
-    var statusLabel = hostGame.status === "armed" ? "live — waiting for a buzz" : hostGame.status === "buzzed" ? "buzzed" : "lobby";
+    var statusLabel =
+      hostGame.status === "armed" ? "у грі — чекаємо на натискання" :
+      hostGame.status === "countdown" ? "відлік…" :
+      hostGame.status === "buzzed" ? "натиснуто" : "очікування";
 
     var playersHtml = sortedPlayers(players).map(function (p, i) {
       var c = PALETTE[i % PALETTE.length];
@@ -297,23 +364,28 @@
       }).join("") + "</div>" : "";
       body =
         '<div class="winner-flash" style="background:' + winnerColor + "22;border:2px solid " + winnerColor + '">' +
-        '<div class="who display" style="color:' + winnerColor + '">' + escapeHtml(hostGame.winnerName || "Someone") + "</div>" +
-        '<div class="sub">buzzed in first</div></div>' + restHtml +
-        '<button class="btn-primary btn-block" id="btn-reset">Reset for next round</button>';
+        '<div class="who display" style="color:' + winnerColor + '">' + escapeHtml(hostGame.winnerName || "Хтось") + "</div>" +
+        '<div class="sub">натиснув першим</div></div>' + restHtml +
+        '<button class="btn-primary btn-block" id="btn-reset">Наступний раунд</button>';
+    } else if (hostGame.status === "countdown") {
+      body =
+        '<div class="countdown-panel"><div class="countdown-num display">' + hostGame.count + "</div>" +
+        '<div class="countdown-note">Приготуйтеся…</div></div>' +
+        '<button class="btn-primary btn-block" disabled>Відлік…</button>';
     } else {
       body =
-        '<div class="player-grid">' + (playersHtml || '<div class="empty-note">Waiting for players to join…</div>') + "</div>" +
+        '<div class="player-grid">' + (playersHtml || '<div class="empty-note">Чекаємо на гравців…</div>') + "</div>" +
         '<button class="btn-primary btn-block" id="btn-start" ' + (players.length === 0 ? "disabled" : "") + ">" +
-        (hostGame.status === "armed" ? "Round live — tap to re-arm" : "Start round") + "</button>";
+        (hostGame.status === "armed" ? "Раунд триває — натисніть, щоб перезапустити" : "Почати раунд") + "</button>";
     }
 
     app.innerHTML =
       '<div class="wrap">' +
-      '<button class="back-link" id="btn-leave">← End game</button>' +
-      '<div class="code-row"><div class="room-code display">' + hostCode + '</div></div>' +
+      '<button class="back-link" id="btn-leave">← Завершити гру</button>' +
+      '<div class="code-row"><div class="room-code display">' + hostCode + "</div></div>" +
       '<div class="status-pill' + (hostGame.status === "armed" ? " live" : "") + '">' + statusLabel + "</div>" +
       body +
-      '<footer class="tag">Players join with code ' + hostCode + ' — keep this tab open</footer>' +
+      '<footer class="tag">Гравці заходять за кодом ' + hostCode + " — не закривайте цю вкладку</footer>" +
       "</div>";
 
     var btnStart = document.getElementById("btn-start");
@@ -321,6 +393,7 @@
     var btnReset = document.getElementById("btn-reset");
     if (btnReset) btnReset.onclick = hostReset;
     document.getElementById("btn-leave").onclick = function () {
+      stopHostCountdown();
       if (hostPeer) { try { hostPeer.destroy(); } catch (e) {} }
       hostPeer = null;
       state.screen = "landing";
@@ -328,12 +401,12 @@
     };
   }
 
-  // ---------- player ----------
+  // ---------- гравець ----------
   var pPeer = null;
   var pConn = null;
   var playerCode = null;
   var playerName = null;
-  var pGame = { status: "lobby", roundId: 0, winnerId: null, winnerName: null };
+  var pGame = { status: "lobby", roundId: 0, count: 0, winnerId: null, winnerName: null };
   var pPlayers = [];
   var pRest = [];
   var hasBuzzedThisRound = false;
@@ -341,14 +414,14 @@
   function renderPlayerJoin() {
     app.innerHTML =
       '<div class="wrap">' +
-      '<button class="back-link" id="btn-back">← Back</button>' +
-      '<div class="hero"><h1 class="display">Join</h1><p>Ask the host for the room code.</p></div>' +
-      '<label for="in-code">Room code</label>' +
+      '<button class="back-link" id="btn-back">← Назад</button>' +
+      '<div class="hero"><h1 class="display">Вхід</h1><p>Запитайте код кімнати у ведучого.</p></div>' +
+      '<label for="in-code">Код кімнати</label>' +
       '<input type="text" id="in-code" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="ABCD">' +
-      '<label for="in-name">Your name</label>' +
-      '<input type="text" id="in-name" maxlength="20" autocomplete="off" placeholder="e.g. Sam">' +
+      '<label for="in-name">Ваше ім’я</label>' +
+      '<input type="text" id="in-name" maxlength="20" autocomplete="off" placeholder="напр. Олена">' +
       '<div class="error-msg" id="join-error"></div>' +
-      '<button class="btn-primary btn-block" id="btn-do-join" style="margin-top:16px">Join</button>' +
+      '<button class="btn-primary btn-block" id="btn-do-join" style="margin-top:16px">Приєднатися</button>' +
       "</div>";
     document.getElementById("btn-back").onclick = function () { state.screen = "landing"; render(); };
     document.getElementById("btn-do-join").onclick = attemptJoin;
@@ -358,8 +431,8 @@
     var code = (document.getElementById("in-code").value || "").trim().toUpperCase();
     var name = (document.getElementById("in-name").value || "").trim();
     var errEl = document.getElementById("join-error");
-    if (code.length !== 4) { errEl.textContent = "Enter the 4-character room code."; return; }
-    if (!name) { errEl.textContent = "Enter your name."; return; }
+    if (code.length !== 4) { errEl.textContent = "Введіть код кімнати з 4 символів."; return; }
+    if (!name) { errEl.textContent = "Введіть ваше ім’я."; return; }
     errEl.textContent = "";
     playerCode = code;
     playerName = name;
@@ -378,7 +451,7 @@
           state.screen = "player-join";
           render();
           var e = document.getElementById("join-error");
-          if (e) e.textContent = "Couldn’t reach a game with that code. Check it and try again.";
+          if (e) e.textContent = "Не знайшли гру з таким кодом. Перевірте його та спробуйте ще раз.";
         }
       }, 8000);
 
@@ -397,7 +470,7 @@
       state.screen = "player-join";
       render();
       var e = document.getElementById("join-error");
-      if (e) e.textContent = "Couldn’t connect. Check the code, or try the same WiFi as the host.";
+      if (e) e.textContent = "Не вдалося під’єднатися. Перевірте код або підключіться до тієї ж Wi-Fi, що й ведучий.";
     });
   }
 
@@ -428,22 +501,28 @@
       var ink = won ? LIGHT_TEXT : "var(--text)";
       app.innerHTML =
         '<div class="wrap"><div class="result-panel" style="background:' + bg + ";color:" + ink + '">' +
-        '<div class="headline display">' + (won ? "You got it!" : "Too slow") + "</div>" +
-        '<div class="detail">' + (won ? "Everyone else is watching you." : escapeHtml(pGame.winnerName || "Someone") + " buzzed first.") + "</div>" +
+        '<div class="headline display">' + (won ? "Ти перший!" : "Не встиг") + "</div>" +
+        '<div class="detail">' + (won ? "Усі дивляться на тебе." : escapeHtml(pGame.winnerName || "Хтось") + " натиснув першим.") + "</div>" +
         "</div>" +
-        '<p style="text-align:center;color:var(--text-dim);margin-top:14px">Waiting for the host to start the next round…</p></div>';
+        '<p style="text-align:center;color:var(--text-dim);margin-top:14px">Чекаємо, поки ведучий почне наступний раунд…</p></div>';
       return;
     }
 
+    var counting = pGame.status === "countdown";
     var armed = pGame.status === "armed";
+    var canBuzz = armed && !hasBuzzedThisRound;
+    var label =
+      counting ? String(pGame.count == null ? "" : pGame.count) :
+      hasBuzzedThisRound ? "Натиснуто!" :
+      armed ? "ТИСНИ" : "Чекайте…";
+
     app.innerHTML =
       '<div class="wrap">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
       '<span><span class="swatch-dot" style="background:' + myColor.hex + '"></span>' + escapeHtml(playerName) + "</span>" +
-      '<span style="color:var(--text-dim);font-size:0.85rem">room ' + playerCode + "</span></div>" +
-      '<button class="buzz-button" id="btn-buzz" style="background:' + (armed && !hasBuzzedThisRound ? myColor.hex : "#2a2f3d") + '" ' +
-      (armed && !hasBuzzedThisRound ? "" : "disabled") + ">" +
-      (hasBuzzedThisRound ? "Buzzed!" : armed ? "BUZZ" : "Wait for it…") + "</button></div>";
+      '<span style="color:var(--text-dim);font-size:0.85rem">кімната ' + playerCode + "</span></div>" +
+      '<button class="buzz-button' + (counting ? " counting" : "") + '" id="btn-buzz" style="background:' + (canBuzz ? myColor.hex : "#2a2f3d") + '" ' +
+      (canBuzz ? "" : "disabled") + ">" + label + "</button></div>";
 
     var btn = document.getElementById("btn-buzz");
     if (btn) btn.onclick = playerBuzz;
