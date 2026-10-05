@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git --version)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(find /Users/mykhailo/dev/personal/small/buzz-in -type f | head -50; echo \"--- parent ---\"; ls -la /Users/mykhailo/dev/personal/small/)",
+      "Read(//Users/mykhailo/dev/personal/small/**)"
+    ]
+  }
+}

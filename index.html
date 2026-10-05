@@ -36,6 +36,8 @@
   .hero h1 { font-size: clamp(2.4rem, 9vw, 3.4rem); line-height: 1; margin: 0 0 10px; text-transform: uppercase; }
   .hero p { color: var(--text-dim); font-size: 1.05rem; max-width: 40ch; margin: 0; }
   .choice-stack { display: flex; flex-direction: column; gap: 14px; margin-top: auto; }
+  .choice-stack .hint { display: block; margin-top: 4px; font-size: 0.85rem; font-weight: 400; color: var(--text-dim); }
+  .choice-stack .btn-primary .hint { color: var(--accent-ink); opacity: 0.75; }
 
   button, .btn {
     font-family: inherit; font-size: 1.05rem; font-weight: 600;
@@ -118,7 +120,7 @@
   var COUNTDOWN_FROM = 3;
 
   var app = document.getElementById("app");
-  var state = { screen: "landing" };
+  var state = { screen: "landing", mode: null }; // mode: "melody" | "questions" — див. renderLanding
 
   function genCode() {
     var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // без 0/O/1/I
@@ -152,7 +154,7 @@
   var wakeLock = null;
 
   function wantsWakeLock() {
-    return state.screen !== "landing";
+    return state.screen !== "landing" && state.screen !== "questions-menu";
   }
 
   function requestWakeLock() {
@@ -184,6 +186,8 @@
   function render() {
     syncWakeLock();
     if (state.screen === "landing") return renderLanding();
+    if (state.screen === "questions-menu") return renderQuestionsMenu();
+    if (state.screen === "room-full") return renderRoomFull();
     if (state.screen === "host-connecting") return renderMessage("Готуємо кімнату…");
     if (state.screen === "host") return renderHost();
     if (state.screen === "player-join") return renderPlayerJoin();
@@ -204,16 +208,41 @@
     document.getElementById("btn-retry").onclick = function () { state.screen = "landing"; render(); };
   }
 
+  // Вибір гри (state.mode):
+  //   "melody"    — «Вгадай мелодію»: ведучим є екран гри, телефон лише кнопка гравця
+  //   "questions" — «Є питання»: ведучий на телефоні, гравці підключаються до нього
   function renderLanding() {
     app.innerHTML =
       '<div class="wrap">' +
-      '<div class="hero"><h1 class="display">Тисни&nbsp;Першим</h1><p>Один ведучий, скільки завгодно гравців. Хто натиснув першим — той і виграв раунд.</p></div>' +
+      '<div class="hero"><h1 class="display">Тисни&nbsp;Першим</h1><p>Для якої гри потрібна кнопка?</p></div>' +
+      '<div class="choice-stack">' +
+      '<button class="btn-primary btn-block" id="btn-mode-melody">Вгадай мелодію<span class="hint">Кнопка гравця — код кімнати на екрані гри</span></button>' +
+      '<button class="btn-ghost btn-block" id="btn-mode-questions">Є питання<span class="hint">Ведучий на телефоні та гравці</span></button>' +
+      "</div></div>";
+    document.getElementById("btn-mode-melody").onclick = function () { state.mode = "melody"; state.screen = "player-join"; render(); };
+    document.getElementById("btn-mode-questions").onclick = function () { state.mode = "questions"; state.screen = "questions-menu"; render(); };
+  }
+
+  function renderQuestionsMenu() {
+    app.innerHTML =
+      '<div class="wrap">' +
+      '<button class="back-link" id="btn-back">← Назад</button>' +
+      '<div class="hero"><h1 class="display">Є&nbsp;питання</h1><p>Один ведучий, скільки завгодно гравців. Хто натиснув першим — той і виграв раунд.</p></div>' +
       '<div class="choice-stack">' +
       '<button class="btn-primary btn-block" id="btn-host">Створити гру</button>' +
       '<button class="btn-ghost btn-block" id="btn-join">Приєднатися до гри</button>' +
       "</div></div>";
+    document.getElementById("btn-back").onclick = function () { state.screen = "landing"; render(); };
     document.getElementById("btn-host").onclick = startHosting;
     document.getElementById("btn-join").onclick = function () { state.screen = "player-join"; render(); };
+  }
+
+  function renderRoomFull() {
+    app.innerHTML =
+      '<div class="wrap"><div class="hero"><h1 class="display">Місць немає</h1>' +
+      '<p>У цій грі вже під’єднані всі гравці. Якщо ви один із них — попросіть ведучого перевірити імена та спробуйте ще раз.</p></div>' +
+      '<button class="btn-primary btn-block" id="btn-retry">Спробувати ще раз</button></div>';
+    document.getElementById("btn-retry").onclick = function () { state.screen = "player-join"; render(); };
   }
 
   // ---------- ведучий ----------
@@ -396,7 +425,7 @@
       stopHostCountdown();
       if (hostPeer) { try { hostPeer.destroy(); } catch (e) {} }
       hostPeer = null;
-      state.screen = "landing";
+      state.screen = "questions-menu";
       render();
     };
   }
@@ -409,13 +438,15 @@
   var pGame = { status: "lobby", roundId: 0, count: 0, winnerId: null, winnerName: null };
   var pPlayers = [];
   var pRest = [];
+  var pLocked = []; // id гравців, які вже помилилися на цій мелодії (лише «Вгадай мелодію»)
   var hasBuzzedThisRound = false;
 
   function renderPlayerJoin() {
     app.innerHTML =
       '<div class="wrap">' +
       '<button class="back-link" id="btn-back">← Назад</button>' +
-      '<div class="hero"><h1 class="display">Вхід</h1><p>Запитайте код кімнати у ведучого.</p></div>' +
+      '<div class="hero"><h1 class="display">Вхід</h1><p>' +
+      (state.mode === "melody" ? "Код кімнати показано на екрані гри." : "Запитайте код кімнати у ведучого.") + "</p></div>" +
       '<label for="in-code">Код кімнати</label>' +
       '<input type="text" id="in-code" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="ABCD">' +
       '<label for="in-name">Ваше ім’я</label>' +
@@ -423,7 +454,10 @@
       '<div class="error-msg" id="join-error"></div>' +
       '<button class="btn-primary btn-block" id="btn-do-join" style="margin-top:16px">Приєднатися</button>' +
       "</div>";
-    document.getElementById("btn-back").onclick = function () { state.screen = "landing"; render(); };
+    document.getElementById("btn-back").onclick = function () {
+      state.screen = state.mode === "questions" ? "questions-menu" : "landing";
+      render();
+    };
     document.getElementById("btn-do-join").onclick = attemptJoin;
   }
 
@@ -459,7 +493,11 @@
         clearTimeout(failTimer);
         pConn.send({ type: "join", name: name });
         pConn.on("data", function (msg) { handlePlayerMessage(msg); });
-        pConn.on("close", function () { state.screen = "peer-unavailable"; render(); });
+        pConn.on("close", function () {
+          if (state.screen !== "player") return; // напр. після відмови «місць немає»
+          state.screen = "peer-unavailable";
+          render();
+        });
         state.screen = "player";
         render();
       });
@@ -476,17 +514,29 @@
 
   var lastRoundSeen = null;
   function handlePlayerMessage(msg) {
+    if (msg && msg.type === "rejected") {
+      state.screen = "room-full";
+      render();
+      if (pPeer) { try { pPeer.destroy(); } catch (e) {} }
+      pPeer = null;
+      return;
+    }
     if (!msg || msg.type !== "state") return;
     if (lastRoundSeen !== null && msg.game.roundId !== lastRoundSeen) hasBuzzedThisRound = false;
     lastRoundSeen = msg.game.roundId;
     pGame = msg.game;
     pPlayers = msg.players || [];
     pRest = msg.rest || [];
+    pLocked = msg.locked || [];
     if (state.screen === "player") render();
   }
 
+  function isLockedOut() {
+    return !!pPeer && pLocked.indexOf(pPeer.id) >= 0;
+  }
+
   function playerBuzz() {
-    if (hasBuzzedThisRound || pGame.status !== "armed" || !pConn) return;
+    if (hasBuzzedThisRound || isLockedOut() || pGame.status !== "armed" || !pConn) return;
     hasBuzzedThisRound = true;
     render();
     try { pConn.send({ type: "buzz", roundId: pGame.roundId }); } catch (e) {}
@@ -510,9 +560,11 @@
 
     var counting = pGame.status === "countdown";
     var armed = pGame.status === "armed";
-    var canBuzz = armed && !hasBuzzedThisRound;
+    var lockedOut = isLockedOut();
+    var canBuzz = armed && !hasBuzzedThisRound && !lockedOut;
     var label =
       counting ? String(pGame.count == null ? "" : pGame.count) :
+      lockedOut ? "Чекай наступну мелодію" :
       hasBuzzedThisRound ? "Натиснуто!" :
       armed ? "ТИСНИ" : "Чекайте…";
 
