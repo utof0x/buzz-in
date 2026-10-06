@@ -96,6 +96,21 @@
   .result-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border-radius: 20px; gap: 8px; padding: 30px 20px; }
   .result-panel .headline { font-size: clamp(2rem, 10vw, 2.8rem); line-height: 1; }
   .result-panel .detail { opacity: 0.85; }
+
+  .choice-head { text-align: center; margin: 10px 0 14px; }
+  .choice-head .headline { font-size: clamp(1.6rem, 8vw, 2.2rem); line-height: 1.05; }
+  .choice-head .detail { color: var(--text-dim); margin-top: 4px; }
+  .option-list { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .option-btn { flex: 1; display: flex; align-items: center; gap: 14px; min-height: 88px; border-radius: 16px; border: 3px solid var(--panel-border); background: var(--panel); color: var(--text); padding: 14px 18px; font-size: 1.15rem; font-weight: 600; line-height: 1.2; text-align: left; transition: transform 0.06s ease; }
+  .option-btn:disabled { opacity: 1; }
+  .option-btn .letter { flex: none; width: 2.2em; height: 2.2em; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: "Oswald", "Arial Narrow", sans-serif; font-weight: 700; font-size: 1.2rem; background: var(--panel-border); color: var(--text); }
+  .option-btn.mine { border-color: var(--accent); }
+  .option-btn.mine .letter { background: var(--accent); color: var(--accent-ink); }
+  .option-btn.faded { opacity: 0.4; }
+  .option-btn.right { border-color: #6fcf3d; background: #6fcf3d22; }
+  .option-btn.right .letter { background: #6fcf3d; color: var(--accent-ink); }
+  .option-btn.wrong { border-color: var(--danger); background: #ff5d5d22; }
+  .option-btn.wrong .letter { background: var(--danger); color: var(--accent-ink); }
   footer.tag { text-align: center; color: var(--text-dim); font-size: 0.8rem; padding-top: 10px; }
 </style>
 </head>
@@ -123,9 +138,9 @@
   var state = { screen: "landing", mode: null }; // mode: "melody" | "questions" — див. renderLanding
 
   function genCode() {
-    var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // без 0/O/1/I
+    var chars = "0123456789"; // лише цифри — легко диктувати й набирати
     var out = "";
-    for (var i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    for (var i = 0; i < 3; i++) out += chars[Math.floor(Math.random() * chars.length)];
     return out;
   }
 
@@ -439,6 +454,13 @@
   var pPlayers = [];
   var pRest = [];
   var pLocked = []; // id гравців, які вже помилилися на цій мелодії (лише «Вгадай мелодію»)
+  // розминка «Вгадай мелодію»: три варіанти на вибір
+  var pOut = [];       // id гравців, які вже вибули з гри
+  var pOptions = [];   // тексти варіантів
+  var pAnswers = {};   // id гравця -> обраний варіант (підтверджено ведучим)
+  var pCorrect = null; // правильний варіант, коли відповідь показано
+  var pResults = {};   // id гравця -> "point" | "late" | "wrong" | "none"
+  var myChoice = null; // що натиснув цей телефон у поточному раунді
   var hasBuzzedThisRound = false;
 
   function renderPlayerJoin() {
@@ -448,7 +470,7 @@
       '<div class="hero"><h1 class="display">Вхід</h1><p>' +
       (state.mode === "melody" ? "Код кімнати показано на екрані гри." : "Запитайте код кімнати у ведучого.") + "</p></div>" +
       '<label for="in-code">Код кімнати</label>' +
-      '<input type="text" id="in-code" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="ABCD">' +
+      '<input type="text" id="in-code" maxlength="3" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="123">' +
       '<label for="in-name">Ваше ім’я</label>' +
       '<input type="text" id="in-name" maxlength="20" autocomplete="off" placeholder="напр. Олена">' +
       '<div class="error-msg" id="join-error"></div>' +
@@ -462,10 +484,10 @@
   }
 
   function attemptJoin() {
-    var code = (document.getElementById("in-code").value || "").trim().toUpperCase();
+    var code = (document.getElementById("in-code").value || "").replace(/\D/g, "");
     var name = (document.getElementById("in-name").value || "").trim();
     var errEl = document.getElementById("join-error");
-    if (code.length !== 4) { errEl.textContent = "Введіть код кімнати з 4 символів."; return; }
+    if (code.length !== 3) { errEl.textContent = "Введіть код кімнати з 3 цифр."; return; }
     if (!name) { errEl.textContent = "Введіть ваше ім’я."; return; }
     errEl.textContent = "";
     playerCode = code;
@@ -522,17 +544,96 @@
       return;
     }
     if (!msg || msg.type !== "state") return;
-    if (lastRoundSeen !== null && msg.game.roundId !== lastRoundSeen) hasBuzzedThisRound = false;
+    if (lastRoundSeen !== null && msg.game.roundId !== lastRoundSeen) { hasBuzzedThisRound = false; myChoice = null; }
     lastRoundSeen = msg.game.roundId;
     pGame = msg.game;
     pPlayers = msg.players || [];
     pRest = msg.rest || [];
     pLocked = msg.locked || [];
+    pOut = msg.out || [];
+    pOptions = msg.options || [];
+    pAnswers = msg.answers || {};
+    pCorrect = msg.correct == null ? null : msg.correct;
+    pResults = msg.results || {};
     if (state.screen === "player") render();
   }
 
   function isLockedOut() {
     return !!pPeer && pLocked.indexOf(pPeer.id) >= 0;
+  }
+
+  function isOut() {
+    return !!pPeer && pOut.indexOf(pPeer.id) >= 0;
+  }
+
+  // те, що обрав цей гравець: підтверджене ведучим або щойно натиснуте
+  function myPick() {
+    var confirmed = pPeer ? pAnswers[pPeer.id] : null;
+    return confirmed == null ? myChoice : confirmed;
+  }
+
+  function playerChoose(option) {
+    if (pGame.status !== "choice" || isOut() || myPick() != null || !pConn) return;
+    myChoice = option;
+    render();
+    try { pConn.send({ type: "answer", roundId: pGame.roundId, option: option }); } catch (e) {}
+  }
+
+  function playerHeader(myColor) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+      '<span><span class="swatch-dot" style="background:' + myColor.hex + '"></span>' + escapeHtml(playerName) + "</span>" +
+      '<span style="color:var(--text-dim);font-size:0.85rem">кімната ' + playerCode + "</span></div>";
+  }
+
+  function renderOut(myColor) {
+    app.innerHTML =
+      '<div class="wrap">' + playerHeader(myColor) +
+      '<div class="result-panel" style="background:#1b1f2a">' +
+      '<div class="headline display">Гру завершено</div>' +
+      '<div class="detail">Ти вже не в грі. Дякуємо за участь!</div></div></div>';
+  }
+
+  // три варіанти: спершу кнопки, після показу відповіді — хто вгадав
+  function renderChoice(myColor) {
+    var revealed = pGame.status === "reveal";
+    var pick = myPick();
+    var result = revealed && pPeer ? (pResults[pPeer.id] || "none") : null;
+    var headline, detail;
+    if (!revealed) {
+      headline = pick == null ? "Яка це пісня?" : "Відповідь прийнято";
+      detail = pick == null ? "Обери один варіант" : "Чекаємо на інших…";
+    } else {
+      headline =
+        result === "point" ? "+1 бал!" :
+        result === "late" ? "Правильно, але пізно" :
+        result === "wrong" ? "Неправильно" : "Без відповіді";
+      detail =
+        result === "late" ? "Ти відповів останнім — бал не зараховано." :
+        result === "point" ? "Правильна відповідь." : "Правильний варіант підсвічено.";
+    }
+
+    var letters = ["A", "B", "C", "D"];
+    var optionsHtml = pOptions.map(function (text, i) {
+      var cls = "option-btn";
+      if (revealed) {
+        if (i === pCorrect) cls += " right";
+        else if (i === pick) cls += " wrong";
+        else cls += " faded";
+      } else if (pick != null) {
+        cls += i === pick ? " mine" : " faded";
+      }
+      return '<button class="' + cls + '" data-option="' + i + '" ' + (revealed || pick != null ? "disabled" : "") + ">" +
+        '<span class="letter">' + letters[i] + "</span><span>" + escapeHtml(text) + "</span></button>";
+    }).join("");
+
+    app.innerHTML =
+      '<div class="wrap">' + playerHeader(myColor) +
+      '<div class="choice-head"><div class="headline display">' + headline + '</div><div class="detail">' + detail + "</div></div>" +
+      '<div class="option-list">' + optionsHtml + "</div></div>";
+
+    Array.prototype.forEach.call(app.querySelectorAll(".option-btn"), function (btn) {
+      btn.onclick = function () { playerChoose(Number(btn.getAttribute("data-option"))); };
+    });
   }
 
   function playerBuzz() {
@@ -544,6 +645,9 @@
 
   function renderPlayer() {
     var myColor = colorForPlayer(pPlayers, pPeer ? pPeer.id : null);
+
+    if (isOut()) return renderOut(myColor);
+    if (pGame.status === "choice" || pGame.status === "reveal") return renderChoice(myColor);
 
     if (pGame.status === "buzzed") {
       var won = pGame.winnerId === (pPeer ? pPeer.id : null);
@@ -569,10 +673,7 @@
       armed ? "ТИСНИ" : "Чекайте…";
 
     app.innerHTML =
-      '<div class="wrap">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-      '<span><span class="swatch-dot" style="background:' + myColor.hex + '"></span>' + escapeHtml(playerName) + "</span>" +
-      '<span style="color:var(--text-dim);font-size:0.85rem">кімната ' + playerCode + "</span></div>" +
+      '<div class="wrap">' + playerHeader(myColor) +
       '<button class="buzz-button' + (counting ? " counting" : "") + '" id="btn-buzz" style="background:' + (canBuzz ? myColor.hex : "#2a2f3d") + '" ' +
       (canBuzz ? "" : "disabled") + ">" + label + "</button></div>";
 
