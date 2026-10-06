@@ -481,6 +481,44 @@
       render();
     };
     document.getElementById("btn-do-join").onclick = attemptJoin;
+    // останні код та ім’я вже підставлені — після збою досить натиснути «Приєднатися»
+    var last = loadLastJoin();
+    if (last.code) document.getElementById("in-code").value = last.code;
+    if (last.name) document.getElementById("in-name").value = last.name;
+  }
+
+  // ---------- з’єднання гравця: вхід, перевірка «чи живе» та авто-перепідключення ----------
+  var STALE_AFTER_MS = 15000; // стільки тиші від гри, що шле сигнали, означає обрив
+  var WATCH_EVERY_MS = 3000;
+  var RETRY_AFTER_MS = 1500;
+  var STORE_KEY = "buzzin-last";
+  var pConnToken = 0;        // номер поточної спроби; події старих спроб ігноруються
+  var pReconnecting = false; // гравець уже був у грі, з’єднання втрачено, пробуємо знову
+  var pHeartbeat = false;    // ведучий регулярно шле стан (екран гри), тож тиша = обрив
+  var pLastMessageAt = 0;
+  var pRetryTimer = null;
+  var pWatchTimer = null;
+
+  // стабільний номер телефона: за ним гра повертає гравцеві його місце після перепідключення
+  var deviceId = (function () {
+    try {
+      var saved = localStorage.getItem("buzzin-device");
+      if (!saved) {
+        saved = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem("buzzin-device", saved);
+      }
+      return saved;
+    } catch (e) {
+      return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+  })();
+
+  function loadLastJoin() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null") || {}; } catch (e) { return {}; }
+  }
+
+  function saveLastJoin(code, name) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ code: code, name: name })); } catch (e) {}
   }
 
   function attemptJoin() {
@@ -492,58 +530,117 @@
     errEl.textContent = "";
     playerCode = code;
     playerName = name;
+    saveLastJoin(code, name);
     hasBuzzedThisRound = false;
+    pReconnecting = false;
     state.screen = "player-connecting";
     render();
+    openConnection();
+  }
 
+  function dropConnection() {
+    pConnToken++; // усе, що ще прийде від попередньої спроби, вже не наше
+    clearTimeout(pRetryTimer);
     if (pPeer) { try { pPeer.destroy(); } catch (e) {} }
-    pPeer = new Peer(undefined, { debug: 0 });
+    pPeer = null;
+    pConn = null;
+  }
 
-    pPeer.on("open", function () {
-      pConn = pPeer.connect(ROOM_PREFIX + code, { reliable: true });
+  function openConnection() {
+    dropConnection();
+    var token = pConnToken;
+    var peer = new Peer(undefined, { debug: 0 });
+    pPeer = peer;
 
-      var failTimer = setTimeout(function () {
-        if (state.screen === "player-connecting") {
-          state.screen = "player-join";
-          render();
-          var e = document.getElementById("join-error");
-          if (e) e.textContent = "Не знайшли гру з таким кодом. Перевірте його та спробуйте ще раз.";
-        }
-      }, 8000);
+    var failTimer = setTimeout(function () {
+      if (token === pConnToken) connectionFailed("Не знайшли гру з таким кодом. Перевірте його та спробуйте ще раз.");
+    }, 8000);
 
-      pConn.on("open", function () {
+    peer.on("open", function () {
+      if (token !== pConnToken) return;
+      var conn = peer.connect(ROOM_PREFIX + playerCode, { reliable: true });
+      pConn = conn;
+
+      conn.on("open", function () {
+        if (token !== pConnToken) return;
         clearTimeout(failTimer);
-        pConn.send({ type: "join", name: name });
-        pConn.on("data", function (msg) { handlePlayerMessage(msg); });
-        pConn.on("close", function () {
-          if (state.screen !== "player") return; // напр. після відмови «місць немає»
-          state.screen = "peer-unavailable";
-          render();
-        });
+        conn.send({ type: "join", name: playerName, deviceId: deviceId });
+        conn.on("data", function (msg) { if (token === pConnToken) handlePlayerMessage(msg); });
+        conn.on("close", function () { if (token === pConnToken) connectionLost(); });
+        pReconnecting = false;
+        pLastMessageAt = Date.now();
         state.screen = "player";
         render();
+        startWatching();
       });
-      pConn.on("error", function () { clearTimeout(failTimer); });
     });
 
-    pPeer.on("error", function () {
-      state.screen = "player-join";
-      render();
-      var e = document.getElementById("join-error");
-      if (e) e.textContent = "Не вдалося під’єднатися. Перевірте код або підключіться до тієї ж Wi-Fi, що й ведучий.";
+    peer.on("error", function () {
+      if (token !== pConnToken) return;
+      clearTimeout(failTimer);
+      connectionFailed("Не вдалося під’єднатися. Перевірте код або підключіться до тієї ж Wi-Fi, що й ведучий.");
     });
+  }
+
+  // перша спроба повертає на екран входу з поясненням; після обриву мовчки пробуємо далі
+  function connectionFailed(message) {
+    dropConnection();
+    if (pReconnecting) { scheduleReconnect(); return; }
+    state.screen = "player-join";
+    render();
+    var e = document.getElementById("join-error");
+    if (e) e.textContent = message;
+  }
+
+  function connectionLost() {
+    if (state.screen !== "player") return; // напр. після відмови «місць немає»
+    dropConnection();
+    pReconnecting = true;
+    render();
+    scheduleReconnect();
+  }
+
+  function scheduleReconnect() {
+    clearTimeout(pRetryTimer);
+    pRetryTimer = setTimeout(function () {
+      if (state.screen === "player" && pReconnecting) openConnection();
+    }, RETRY_AFTER_MS);
+  }
+
+  // раз на кілька секунд: кажемо грі, що телефон на місці, і перевіряємо, чи не замовкла вона
+  function startWatching() {
+    if (pWatchTimer) return;
+    pWatchTimer = setInterval(function () {
+      if (state.screen !== "player" || pReconnecting) return;
+      try { if (pConn) pConn.send({ type: "ping" }); } catch (e) {}
+      if (pHeartbeat && Date.now() - pLastMessageAt > STALE_AFTER_MS) connectionLost();
+    }, WATCH_EVERY_MS);
+  }
+
+  // поки вкладка була схована, таймери й повідомлення стояли — даємо з’єднанню час показати, що воно живе
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") pLastMessageAt = Date.now();
+  });
+
+  function leaveRoom() {
+    dropConnection();
+    pReconnecting = false;
+    state.screen = "player-join";
+    render();
   }
 
   var lastRoundSeen = null;
   function handlePlayerMessage(msg) {
     if (msg && msg.type === "rejected") {
+      pReconnecting = false;
+      dropConnection();
       state.screen = "room-full";
       render();
-      if (pPeer) { try { pPeer.destroy(); } catch (e) {} }
-      pPeer = null;
       return;
     }
+    pLastMessageAt = Date.now();
     if (!msg || msg.type !== "state") return;
+    pHeartbeat = !!msg.hb;
     if (lastRoundSeen !== null && msg.game.roundId !== lastRoundSeen) { hasBuzzedThisRound = false; myChoice = null; }
     lastRoundSeen = msg.game.roundId;
     pGame = msg.game;
@@ -583,6 +680,16 @@
     return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
       '<span><span class="swatch-dot" style="background:' + myColor.hex + '"></span>' + escapeHtml(playerName) + "</span>" +
       '<span style="color:var(--text-dim);font-size:0.85rem">кімната ' + playerCode + "</span></div>";
+  }
+
+  function renderReconnecting(myColor) {
+    app.innerHTML =
+      '<div class="wrap">' + playerHeader(myColor) +
+      '<div class="result-panel" style="background:#1b1f2a">' +
+      '<div class="headline display">Зв’язок втрачено</div>' +
+      '<div class="detail">Перепідключаємося до гри…</div></div>' +
+      '<button class="back-link" id="btn-leave-room" style="align-self:center;margin-top:14px">Ввести інший код</button></div>';
+    document.getElementById("btn-leave-room").onclick = leaveRoom;
   }
 
   function renderOut(myColor) {
@@ -646,6 +753,7 @@
   function renderPlayer() {
     var myColor = colorForPlayer(pPlayers, pPeer ? pPeer.id : null);
 
+    if (pReconnecting) return renderReconnecting(myColor);
     if (isOut()) return renderOut(myColor);
     if (pGame.status === "choice" || pGame.status === "reveal") return renderChoice(myColor);
 
